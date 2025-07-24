@@ -255,12 +255,15 @@ class VoiceAuthApp(Tk):
             "Click ‘Done’ once you have finished reading the script."
         )
 
+        # Ensure text is readable even when the system is in dark-mode where
+        # the default label foreground is white.
         Label(
             self.content_frame,
             text=instructions,
             wraplength=550,
             justify="left",
             bg="#f0f4f7",
+            fg="#2c3e50",
         ).pack(pady=6)
 
         ttk.Button(
@@ -390,12 +393,14 @@ class VoiceAuthApp(Tk):
             "screen out loud, then click ‘Done’."
         )
 
+        # Same readability fix as the registration instructions.
         Label(
             self.content_frame,
             text=verify_instructions,
             wraplength=550,
             justify="left",
             bg="#f0f4f7",
+            fg="#2c3e50",
         ).pack(pady=6)
 
         ttk.Button(
