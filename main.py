@@ -517,7 +517,7 @@ class VoiceAuthApp(Tk):
                     self.after(
                         0,
                         lambda m=msg: [
-                            messagebox.showinfo("Verified", m),
+                            self._show_verification_result(True, m),
                             self._build_verify_form(),
                         ],
                     )
@@ -529,7 +529,7 @@ class VoiceAuthApp(Tk):
                     self.after(
                         0,
                         lambda m=msg: [
-                            messagebox.showwarning("No Match", m),
+                            self._show_verification_result(False, m),
                             self._build_verify_form(),
                         ],
                     )
@@ -557,7 +557,8 @@ class VoiceAuthApp(Tk):
 
         # Use grid to control row weights (last row stretches)
         admin_inner.columnconfigure(0, weight=1)
-        admin_inner.rowconfigure(5, weight=1)
+        # Reserve stretch only for the scrolling list row – not the heading.
+        admin_inner.rowconfigure(5, weight=0)
 
         # --- Title ----------------------------------------------------
         ttk.Label(
@@ -575,11 +576,14 @@ class VoiceAuthApp(Tk):
 
         ttk.Label(threshold_frame, text="Similarity Threshold (0-1):").grid(row=0, column=0, sticky="w")
         ttk.Entry(threshold_frame, textvariable=self.threshold_var, width=15).grid(
-            row=0, column=1, sticky="w", pady=2, padx=(5, 0)
+            row=0, column=1, sticky="ew", pady=2, padx=(5, 0)
         )
         ttk.Button(
-            threshold_frame, text="Save", command=self._save_settings, width=12
-        ).grid(row=0, column=2, padx=10)
+            threshold_frame,
+            text="Save",
+            command=self._save_settings,
+            width=12,
+        ).grid(row=0, column=2, padx=10, sticky="e")
 
         # --- Script management section --------------------------------
         ttk.Separator(admin_inner, orient="horizontal").grid(row=2, column=0, sticky="ew", pady=10)
@@ -602,17 +606,20 @@ class VoiceAuthApp(Tk):
         )
 
         ttk.Button(
-            scripts_frame, text="Save Scripts", command=self._save_scripts, width=15
-        ).grid(row=2, column=0, columnspan=2, pady=10)
+            scripts_frame,
+            text="Save Scripts",
+            command=self._save_scripts,
+            width=15,
+        ).grid(row=2, column=1, sticky="e", pady=10)
 
         # --- Users list ----------------------------------------------
         ttk.Separator(admin_inner, orient="horizontal").grid(row=4, column=0, sticky="ew", pady=10)
 
         ttk.Label(
             admin_inner,
-            text="Registered Users:",
+            text="User List",
             font=("Segoe UI", 14, "bold"),
-        ).grid(row=5, column=0, sticky="w")
+        ).grid(row=5, column=0, sticky="w", pady=(0, 4))
 
         # Canvas + scrollbar hosted in its own container (row 6, weight=1)
         list_container = Frame(admin_inner, bg=self.content_frame.cget("bg"))
@@ -634,10 +641,36 @@ class VoiceAuthApp(Tk):
         rows_frame = Frame(canvas, bg=self.content_frame.cget("bg"))
         canvas.create_window((0, 0), window=rows_frame, anchor="nw")
 
+        # ------------------------------------------------------------
+        # Enable track-pad / mouse-wheel scrolling (macOS, Windows, Linux)
+        # ------------------------------------------------------------
+
+        def _on_mousewheel(event, c=canvas):
+            """Cross-platform mouse/track-pad scroll handler.
+
+            * Windows:  event.delta is ±120 per notch.
+            * macOS:    event.delta is already small (±1) per line.
+            * X11:      we listen to separate Button-4/5 events below.
+            """
+
+            if event.delta:
+                # Convert the delta to a single scroll unit preserving sign.
+                steps = int(event.delta / abs(event.delta)) if abs(event.delta) < 120 else int(event.delta / 120)
+                c.yview_scroll(-steps, "units")
+
+        # Bind both the standard *MouseWheel* and X11 *Button-4/5* events
+        canvas.bind_all("<MouseWheel>", _on_mousewheel, add="+")
+        canvas.bind_all("<Button-4>", lambda e, c=canvas: c.yview_scroll(-1, "units"), add="+")
+        canvas.bind_all("<Button-5>", lambda e, c=canvas: c.yview_scroll(1, "units"), add="+")
+
         def _on_frame_config(event):
             canvas.configure(scrollregion=canvas.bbox("all"))
 
         rows_frame.bind("<Configure>", _on_frame_config)
+
+        # ------------------------------------------------------------
+        # Header row so that the admin knows what the list represents
+        # ------------------------------------------------------------
 
         users = self.session.query(User).all()
 
@@ -677,6 +710,50 @@ class VoiceAuthApp(Tk):
         self.config["verification_script"] = self.ver_script_var.get()
         save_config(self.config)
         messagebox.showinfo("Success", "Scripts updated.")
+
+    # ------------------------------------------------------------
+    # Dialog helpers
+    # ------------------------------------------------------------
+
+    def _show_verification_result(self, verified: bool, message: str) -> None:
+        """Display a custom-coloured result dialog.
+
+        A green background signals a successful verification, while red
+        denotes a failure.  This replaces the default *messagebox* so that we
+        can control the colour scheme.
+        """
+
+        from tkinter import Toplevel  # Local import to avoid polluting top
+
+        colour = "#2ecc71" if verified else "#e74c3c"  # Green / Red
+
+        dlg = Toplevel(self)
+        dlg.title("Verification Result")
+        dlg.configure(bg=colour)
+
+        # Centre over parent window
+        dlg.transient(self)
+        dlg.grab_set()
+
+        Label(
+            dlg,
+            text=message,
+            bg=colour,
+            fg="white",
+            font=("Segoe UI", 12),
+            justify="left",
+            wraplength=400,
+        ).pack(padx=20, pady=20)
+
+        ttk.Button(dlg, text="OK", command=dlg.destroy).pack(pady=(0, 20))
+
+        # Ensure the dialog is sized correctly before we attempt to position
+        dlg.update_idletasks()
+        w = dlg.winfo_width()
+        h = dlg.winfo_height()
+        x = self.winfo_rootx() + (self.winfo_width() - w) // 2
+        y = self.winfo_rooty() + (self.winfo_height() - h) // 2
+        dlg.geometry(f"{w}x{h}+{x}+{y}")
 
     # ------------------------------------------------------------
     # User deletion helpers
