@@ -12,6 +12,7 @@ from tkinter import (
     Tk,
     Frame,
     Label,
+    Canvas,
     StringVar,
     messagebox,
 )
@@ -19,7 +20,9 @@ from tkinter import (
 # out of the box, so we prefer it for most controls.
 from tkinter import ttk
 
-from db import SessionLocal, init_db, User
+# The DB layer exposes lightweight ORM-like helpers.  We now also need
+# the new ``delete_user`` utility.
+from db import SessionLocal, init_db, User, delete_user
 from config_utils import load_config, save_config
 from audio_utils import Recorder, trim_wav_silence
 from audio_embedding import get_audio_embedding
@@ -545,36 +548,115 @@ class VoiceAuthApp(Tk):
 
         self._clear_frame()
 
+        # ------------------------------------------------------------
+        # Layout – dedicate remaining vertical space to the user list
+        # ------------------------------------------------------------
+
+        admin_inner = Frame(self.content_frame, bg=self.content_frame.cget("bg"))
+        admin_inner.pack(fill="both", expand=True)
+
+        # Use grid to control row weights (last row stretches)
+        admin_inner.columnconfigure(0, weight=1)
+        admin_inner.rowconfigure(5, weight=1)
+
+        # --- Title ----------------------------------------------------
         ttk.Label(
-            self.content_frame,
+            admin_inner,
             text="Admin Panel",
             font=("Segoe UI", 16, "bold"),
-        ).pack(pady=10)
+        ).grid(row=0, column=0, sticky="w", pady=(0, 10))
 
+        # --- Similarity threshold section -----------------------------
         self.threshold_var = StringVar(value=str(self.config.get("similarity_threshold", 0.8)))
-        ttk.Label(self.content_frame, text="Similarity Threshold (0-1):").pack(anchor="w")
-        ttk.Entry(self.content_frame, textvariable=self.threshold_var, width=15).pack(pady=2)
 
+        threshold_frame = Frame(admin_inner, bg=self.content_frame.cget("bg"))
+        threshold_frame.grid(row=1, column=0, sticky="ew")
+        threshold_frame.columnconfigure(1, weight=1)
+
+        ttk.Label(threshold_frame, text="Similarity Threshold (0-1):").grid(row=0, column=0, sticky="w")
+        ttk.Entry(threshold_frame, textvariable=self.threshold_var, width=15).grid(
+            row=0, column=1, sticky="w", pady=2, padx=(5, 0)
+        )
         ttk.Button(
-            self.content_frame, text="Save Settings", command=self._save_settings, width=20
-        ).pack(pady=10)
+            threshold_frame, text="Save", command=self._save_settings, width=12
+        ).grid(row=0, column=2, padx=10)
 
-        # Script management
-        ttk.Separator(self.content_frame, orient="horizontal").pack(fill="x", pady=10)
+        # --- Script management section --------------------------------
+        ttk.Separator(admin_inner, orient="horizontal").grid(row=2, column=0, sticky="ew", pady=10)
 
-        ttk.Label(self.content_frame, text="Registration Script:").pack(anchor="w", pady=3)
+        scripts_frame = Frame(admin_inner, bg=self.content_frame.cget("bg"))
+        scripts_frame.grid(row=3, column=0, sticky="ew")
+        scripts_frame.columnconfigure(1, weight=1)
+
         self.reg_script_var = StringVar(value=self.config.get("registration_script", ""))
-        ttk.Entry(self.content_frame, textvariable=self.reg_script_var, width=60).pack(pady=2, fill="x")
-
-        ttk.Label(self.content_frame, text="Verification Script:").pack(anchor="w", pady=3)
         self.ver_script_var = StringVar(value=self.config.get("verification_script", ""))
-        ttk.Entry(self.content_frame, textvariable=self.ver_script_var, width=60).pack(pady=2, fill="x")
+
+        ttk.Label(scripts_frame, text="Registration Script:").grid(row=0, column=0, sticky="w")
+        ttk.Entry(scripts_frame, textvariable=self.reg_script_var, width=60).grid(
+            row=0, column=1, sticky="ew", pady=2
+        )
+
+        ttk.Label(scripts_frame, text="Verification Script:").grid(row=1, column=0, sticky="w")
+        ttk.Entry(scripts_frame, textvariable=self.ver_script_var, width=60).grid(
+            row=1, column=1, sticky="ew", pady=2
+        )
 
         ttk.Button(
-            self.content_frame, text="Save Scripts", command=self._save_scripts, width=20
-        ).pack(pady=15)
+            scripts_frame, text="Save Scripts", command=self._save_scripts, width=15
+        ).grid(row=2, column=0, columnspan=2, pady=10)
 
-        # Ensure UI renders immediately
+        # --- Users list ----------------------------------------------
+        ttk.Separator(admin_inner, orient="horizontal").grid(row=4, column=0, sticky="ew", pady=10)
+
+        ttk.Label(
+            admin_inner,
+            text="Registered Users:",
+            font=("Segoe UI", 14, "bold"),
+        ).grid(row=5, column=0, sticky="w")
+
+        # Canvas + scrollbar hosted in its own container (row 6, weight=1)
+        list_container = Frame(admin_inner, bg=self.content_frame.cget("bg"))
+        list_container.grid(row=6, column=0, sticky="nsew")
+        admin_inner.rowconfigure(6, weight=1)
+
+        canvas = Canvas(
+            list_container,
+            borderwidth=0,
+            background=self.content_frame.cget("bg"),
+            highlightthickness=0,
+        )
+        v_scroll = ttk.Scrollbar(list_container, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=v_scroll.set)
+
+        v_scroll.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        rows_frame = Frame(canvas, bg=self.content_frame.cget("bg"))
+        canvas.create_window((0, 0), window=rows_frame, anchor="nw")
+
+        def _on_frame_config(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        rows_frame.bind("<Configure>", _on_frame_config)
+
+        users = self.session.query(User).all()
+
+        if not users:
+            ttk.Label(rows_frame, text="No users registered yet.").pack(pady=5)
+        else:
+            for user in users:
+                row = Frame(rows_frame, bg=self.content_frame.cget("bg"))
+                row.pack(fill="x", pady=2)
+
+                ttk.Label(row, text=f"{user.first_name} {user.last_name}").pack(side="left", padx=5)
+
+                ttk.Button(
+                    row,
+                    text="Delete",
+                    command=lambda uid=user.id, uname=user.full_name(): self._confirm_delete_user(uid, uname),
+                    width=10,
+                ).pack(side="right", padx=5)
+
         self.update_idletasks()
 
     def _save_settings(self):
@@ -595,6 +677,34 @@ class VoiceAuthApp(Tk):
         self.config["verification_script"] = self.ver_script_var.get()
         save_config(self.config)
         messagebox.showinfo("Success", "Scripts updated.")
+
+    # ------------------------------------------------------------
+    # User deletion helpers
+    # ------------------------------------------------------------
+
+    def _confirm_delete_user(self, user_id: int, user_name: str) -> None:
+        """Ask for confirmation and delete the user if confirmed.
+
+        Parameters
+        ----------
+        user_id:
+            Primary key of the user in the *users.json* store.
+        user_name:
+            Display name shown in the confirmation dialogue.
+        """
+
+        if not messagebox.askyesno(
+            "Confirm Deletion", f"Are you sure you want to delete {user_name}?"
+        ):
+            return
+
+        if delete_user(user_id):
+            messagebox.showinfo("Success", f"{user_name} has been deleted.")
+        else:
+            messagebox.showerror("Error", "User not found – nothing deleted.")
+
+        # Refresh the admin panel to reflect changes immediately.
+        self._build_admin_panel()
 
 
 if __name__ == "__main__":

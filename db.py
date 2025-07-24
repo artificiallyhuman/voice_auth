@@ -208,4 +208,41 @@ __all__ = [
     "User",
     "SessionLocal",
     "init_db",
+    "delete_user",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Additional helper – delete user by ID
+# ---------------------------------------------------------------------------
+
+
+def delete_user(user_id: int) -> bool:  # noqa: D401 – simple helper
+    """Remove a user from the *users.json* store.
+
+    Parameters
+    ----------
+    user_id:
+        The primary key of the user to remove.
+
+    Returns
+    -------
+    bool
+        ``True`` if a user was removed, ``False`` otherwise.
+    """
+
+    if not isinstance(user_id, int):
+        raise TypeError("user_id must be an integer")
+
+    users_raw = _read_users_file()
+    initial_len = len(users_raw)
+
+    users_filtered = [u for u in users_raw if u.get("id") != user_id]
+
+    if len(users_filtered) == initial_len:
+        # Nothing removed – id not found
+        return False
+
+    _write_users_file(users_filtered)
+    return True
+
