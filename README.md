@@ -31,7 +31,7 @@ state-of-the-art *ECAPA-TDNN* speaker-embedding model provided by
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/your-username/voice_auth.git
+   git clone https://github.com/artificiallyhuman/voice_auth.git
    cd voice_auth
    ```
 
@@ -48,9 +48,8 @@ state-of-the-art *ECAPA-TDNN* speaker-embedding model provided by
    pip install -r requirements.txt
    ```
 
-   The first run will also download the ~55 MB pre-trained ECAPA model from
-   the HuggingFace Hub and cache it inside `pretrained_models/` (or your
-   system-wide HF cache).
+   The repository already contains the ~55 MB pre-trained ECAPA model inside
+   `pretrained_models/`, so no additional download is required on first run.
 
 4. **Launch the GUI**
 
@@ -84,7 +83,8 @@ state-of-the-art *ECAPA-TDNN* speaker-embedding model provided by
 ```
 voice_auth/
 ├── audio_embedding.py   # SpeechBrain wrapper
-├── audio_utils.py       # Recording, WAV↔MP3 and silence trimming helpers
+├── audio_utils.py       # Recording and silence-trimming helpers (optional
+|                         WAV→MP3 conversion utilities are also included)
 ├── config_utils.py      # JSON config loader / saver
 ├── db.py                # Lightweight JSON persistence replacing SQL
 ├── main.py              # Tkinter GUI application entry-point
@@ -101,9 +101,10 @@ voice_auth/
 Mandatory Python packages are listed in `requirements.txt`.  In addition you
 need:
 
-• **FFmpeg** – Required by *pydub* to encode/decode MP3.  Make sure the
-  `ffmpeg` binary is available on your `PATH` (e.g. `brew install ffmpeg` on
-  macOS).  
+• **FFmpeg** – Only needed if you plan to use the optional MP3 helpers in
+  `audio_utils.py` or if `torchaudio` on your platform lacks native MP3
+  support.  Make sure the `ffmpeg` binary is available on your `PATH` (e.g.
+  `brew install ffmpeg` on macOS).  
 • A working **microphone** and a recent version of **PortAudio** (bundled with
   the `sounddevice` Python package for most platforms).
 
@@ -136,19 +137,23 @@ Experiment and find the sweet spot for your use-case in the *Admin* tab.
   could bypass verification.  
 • Single sample enrollment – adding multiple recordings per user would improve
   robustness.  
-• GUI blocks during initial model download (~55 MB) – subsequent starts are
-  instantaneous.
+• GUI blocks for a second or two while the ECAPA model is first loaded into
+  memory.  (The weights ship with the repo, so there is no network delay.)
 
 
 ## Contributing
 
 Pull requests are welcome!  Feel free to open issues for suggestions or bug
-reports.  To set up a development environment simply run:
+reports.  To set up a development environment simply create a virtual
+environment and install the dependencies:
 
 ```bash
-pre-commit install  # if you have pre-commit configured
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+If you use *pre-commit* in your own workflow you can of course run it locally,
+but the project does not require it.
 
 
 ## License
