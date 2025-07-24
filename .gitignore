@@ -1,0 +1,16 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Runtime artefacts
+recordings/
+users.json
+pretrained_models/
+
+# macOS
+.DS_Store

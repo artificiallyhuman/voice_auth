@@ -1,0 +1,15 @@
+sounddevice==0.4.6
+soundfile==0.12.1
+pydub==0.25.1
+# The application now stores user data in a local JSON file, so the SQL-related
+# dependencies are no longer required.
+requests==2.31.0
+numpy==1.26.4
+# Optional cloud API dependency has been removed; VoiceGuard now relies solely
+# on fully open-source tooling.
+
+# Speaker-embedding model and its dependencies
+speechbrain==0.5.15
+torch==2.2.1
+torchaudio==2.2.1
+torchvision
