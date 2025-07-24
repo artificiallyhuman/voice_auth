@@ -1,5 +1,5 @@
 {
   "similarity_threshold": 0.6,
-  "registration_script": "This is my voice. It serves as my passport. Please verify my identity.",
+  "registration_script": "This is my voice. I would like to use it for identity verification purposes.",
   "verification_script": "This is my voice. It serves as my passport. Please verify my identity."
 }
